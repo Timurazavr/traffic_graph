@@ -9,7 +9,7 @@
 #include "DynamicGraph.h"
 
 const int INF = std::numeric_limits<int>::max();
-const int PERIOD_STOPLIGHT = 10;
+const int PERIOD_STOPLIGHT = 20;
 const double TICK = 0.2;
 const int SPEED = 5; // 90kmh = 25ms
 

@@ -14,21 +14,17 @@ def on_scroll(event):
     if ax is None:
         return
 
-    # Определяем направление прокрутки и коэффициент масштабирования
-    # event.button может быть 'up' или 'down'
     base_scale = 1.1
     if event.button == "up":
-        scale_factor = 1 / base_scale  # Приближение
+        scale_factor = 1 / base_scale
     elif event.button == "down":
-        scale_factor = base_scale  # Удаление
+        scale_factor = base_scale
     else:
         scale_factor = 1
 
-    # Получаем текущие границы графика
     xlim = ax.get_xlim()
     ylim = ax.get_ylim()
 
-    # Вычисляем новые границы относительно точки, где находится курсор
     xdata = event.xdata
     ydata = event.ydata
 
@@ -41,61 +37,46 @@ def on_scroll(event):
         ydata + (ylim[1] - ydata) * scale_factor,
     ]
 
-    # Устанавливаем новые границы и обновляем холст
     ax.set_xlim(new_xlim)
     ax.set_ylim(new_ylim)
     event.canvas.draw_idle()
 
 
 class TrafficVisualizer:
-    """
-    Визуализатор динамического графа города.
-    Загружает статику из файлов и плавно отображает состояние симуляции из UDP-сокета.
-    """
-
     def __init__(self, grid_size=10):
         self.port = PORT
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.bind((HOST, self.port))
-        # Минимальный таймаут для реализации неблокирующего чтения в цикле анимации
+
         self.sock.settimeout(0.002)
 
         self.grid_size = grid_size
 
-        # Статические данные графа
         self.nodes = []
         self.edges = []
         self.edge_lines = None
         self.node_scatter = None
 
-        # Динамические объекты
         self.vehicles_scatter = None
         self.traffic_scatter = None
 
-        # Реестр для плавного перемещения машин: { vehicle_id: {curr_x, curr_y, to_x, to_y} }
         self.vehicles_registry = {}
 
-        # Настройка окна Matplotlib
         self.fig, self.ax = plt.subplots(figsize=(8, 8))
         self.fig.canvas.mpl_connect("scroll_event", on_scroll)
         self.ax.set_aspect("equal")
         self.ax.grid(True, linestyle="--", alpha=0.3)
 
-        # Шаг 1: Загружаем статику из файлов прямо при инициализации
         self.load_static_from_files()
 
-        # Шаг 2: Сразу отрисовываем дорожную сеть
         self.init_plot()
-        self.ax.set_title("Карта загружена. Ожидание динамических данных...")
+        self.ax.set_title("Карта загружена. Ожидание динамических данных")
 
     def load_static_from_files(self):
-        """Загружает структуру графа из локальных текстовых файлов."""
-        # Чтение координат перекрестков (узлов)
         try:
             with open("graph_coord.txt", "r", encoding="utf-8") as f:
                 lines = f.read().splitlines()
                 if lines:
-                    # Пропускаем первую строчку с метаданными, парсим остальные
                     for line in lines[1:]:
                         line = line.strip()
                         if not line:
@@ -113,12 +94,10 @@ class TrafficVisualizer:
         except Exception as e:
             print(f"Ошибка при чтении graph_coordinates.txt: {e}")
 
-        # Чтение дорог (ребер)
         try:
             with open("graph_dist.txt", "r", encoding="utf-8") as f:
                 lines = f.read().splitlines()
                 if lines:
-                    # Пропускаем первую строчку, парсим ребра
                     for line in lines[1:]:
                         line = line.strip()
                         if not line:
@@ -133,7 +112,6 @@ class TrafficVisualizer:
             print(f"Ошибка при чтении graph_dist.txt: {e}")
 
     def init_plot(self):
-        """Первичная отрисовка статических слоев графа."""
         if not self.nodes:
             return
 
@@ -155,12 +133,11 @@ class TrafficVisualizer:
         for edge in self.edges:
             u = next((n for n in self.nodes if n["id"] == edge["from"]), None)
             v = next((n for n in self.nodes if n["id"] == edge["to"]), None)
-            # Безопасная проверка существования обоих узлов на карте
+
             if u and v:
                 segments.append([(u["x"], u["y"]), (v["x"], v["y"])])
                 valid_edges.append(edge)
 
-        # Оставляем только те ребра, которые смогли успешно связать
         self.edges = valid_edges
 
         self.edge_lines = LineCollection(
@@ -185,18 +162,15 @@ class TrafficVisualizer:
         self.ax.legend(loc="upper right")
 
     def update_with_data(self, data):
-        """Обновление внутреннего состояния симуляции из полученного пакета."""
 
         vehicles = data.get("vehicles", [])
         active_ids = set()
         for v in vehicles:
-            # Если у машин в JSON нет явного "id", используем индекс в массиве
             v_id = v["id"]
             active_ids.add(v_id)
             tx, ty = v["x"], v["y"]
 
             if v_id not in self.vehicles_registry:
-                # Новая машина: мгновенно ставим в начальную координату
                 self.vehicles_registry[v_id] = {
                     "curr_x": tx,
                     "curr_y": ty,
@@ -204,23 +178,20 @@ class TrafficVisualizer:
                     "to_y": ty,
                 }
             else:
-                # Существующая машина: обновляем ей конечную цель
                 self.vehicles_registry[v_id]["to_x"] = tx
                 self.vehicles_registry[v_id]["to_y"] = ty
 
-        # Мягко удаляем машины, которых больше нет в активном кадре симуляции
         self.vehicles_registry = {
             v_id: val
             for v_id, val in self.vehicles_registry.items()
             if v_id in active_ids
         }
 
-        # Обновление загруженности дорог цветом (зеленый -> красный)
         edge_states = data.get("edge_states", [])
         if edge_states and self.edge_lines:
             colors = []
             widths = []
-            # Используем zip для безопасного сопоставления, даже если размеры массивов отличаются
+
             for state, edge in zip(edge_states, self.edges):
                 congestion = state
                 r = min(1.0, congestion)
@@ -231,26 +202,55 @@ class TrafficVisualizer:
                 self.edge_lines.set_colors(colors)
                 self.edge_lines.set_linewidths(widths)
 
-        # # Обновление состояний светофоров
         traffic_lights = data.get("traffic_lights", [])
         if traffic_lights and self.traffic_scatter:
+            green_map = {}
+            for idx, entry in enumerate(traffic_lights):
+                if isinstance(entry, dict):
+                    node_id = entry.get("node", entry.get("id"))
+                    green_from = entry.get("tl", [])
+                else:
+                    node_id = self.nodes[idx]["id"] if idx < len(self.nodes) else None
+                    green_from = entry
+                if node_id is not None:
+                    green_map[node_id] = set(green_from)
+
+            node_by_id = {n["id"]: n for n in self.nodes}
+
+            offset_ratio = 0.1
+
             light_positions = []
             light_colors = []
-            # for ind, tl in enumerate(traffic_lights):
-            #     light_positions.append([self.nodes[ind]["x"], self.nodes[ind]["y"]])
-            #         light_colors.append("green" if tl.get("state", 0) == 1 else "red")
+            for edge in self.edges:
+                from_id, to_id = edge["from"], edge["to"]
+
+                if to_id not in green_map:
+                    continue
+
+                u = node_by_id.get(from_id)
+                v = node_by_id.get(to_id)
+                if not u or not v:
+                    continue
+
+                lx = v["x"] + (u["x"] - v["x"]) * offset_ratio
+                ly = v["y"] + (u["y"] - v["y"]) * offset_ratio
+                light_positions.append((lx, ly))
+
+                is_green = from_id in green_map[to_id]
+                light_colors.append("#2ecc71" if is_green else "#e74c3c")
+
             if light_positions:
                 self.traffic_scatter.set_offsets(light_positions)
                 self.traffic_scatter.set_color(light_colors)
+            else:
+                self.traffic_scatter.set_offsets(np.empty((0, 2)))
 
-        # Обновление размеров узлов по PageRank
         pagerank = data.get("pagerank", [])
         if pagerank and self.node_scatter:
             pr_dict = {p["node"]: p["value"] for p in pagerank}
             sizes = [150 + 400 * pr_dict.get(node["id"], 0.1) for node in self.nodes]
             self.node_scatter.set_sizes(sizes)
 
-        # Вывод статистики
         stats = data.get("stats", {})
         total = stats.get("total_vehicles", 0)
         avg_speed = stats.get("avg_speed", 0.0)
@@ -260,17 +260,15 @@ class TrafficVisualizer:
         )
 
     def animate_vehicles(self):
-        """Выполняет шаг плавной интерполяции движения машин."""
         if self.vehicles_scatter is None:
             return
 
         xs = []
         ys = []
-        # Скорость сглаживания (0.15 - оптимум для красивого скольжения без рывков)
+
         interpolation_speed = 0.15
 
         for v_id, v_data in self.vehicles_registry.items():
-            # Линейно приближаем текущую координату к целевой
             v_data["curr_x"] += (
                 v_data["to_x"] - v_data["curr_x"]
             ) * interpolation_speed
@@ -286,45 +284,37 @@ class TrafficVisualizer:
             self.vehicles_scatter.set_offsets(np.empty((0, 2)))
 
     def run(self):
-        """Основной цикл прослушивания сокета с высокой частотой обновления кадра."""
         plt.ion()
         self.fig.show()
-        print(
-            "Визуализатор запущен. Карта построена на основе конфигурационных файлов."
-        )
-        print("Ожидание UDP-пакетов для обновления динамических объектов...")
+        print("Визуализатор запущен")
+        print("Ожидание UDP пакетов")
 
         while True:
             start_frame_time = time.time()
 
-            # Читаем абсолютно все скопившиеся пакеты из буфера, чтобы не копить пинг
             last_data = None
             while True:
                 try:
                     data_bytes, _ = self.sock.recvfrom(65536)
                     last_data = json.loads(data_bytes.decode())
                 except socket.timeout:
-                    break  # Буфер сокета пуст, переходим к отрисовке кадра
+                    break
                 except Exception as e:
                     print(f"Ошибка чтения данных сокета: {e}")
                     print(data_bytes.decode())
                     break
 
-            # Если получили свежее обновление сети, применяем
             if last_data is not None:
                 self.update_with_data(last_data)
 
-            # Плавный сдвиг машин на текущем кадре анимации
             self.animate_vehicles()
 
-            # Перерисовываем холст Matplotlib
             try:
                 self.fig.canvas.draw()
                 self.fig.canvas.flush_events()
             except (KeyboardInterrupt, Exception):
                 break
 
-            # Стабилизируем цикл на уровне ~50 FPS, чтобы не грузить ядро CPU на 100%
             frame_elapsed = time.time() - start_frame_time
             sleep_time = 0.02 - frame_elapsed
             if sleep_time > 0:
