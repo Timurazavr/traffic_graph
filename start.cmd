@@ -10,7 +10,7 @@ if %errorlevel% neq 0 (
 )
 
 echo [2/3] Фоновый запуск Python скрипта...
-start "" "C:\Users\Timur\Programs\Python\Python313\python.exe" "C:\Users\Timur\Desktop\traffic_graph\main.py"
+start "" "C:\Users\Timur\Programs\Python\Python313\python.exe" "C:\Users\Timur\traffic_graph\main.py"
 
 echo [3/3] Запуск скомпилированного файла...
 main.exe
